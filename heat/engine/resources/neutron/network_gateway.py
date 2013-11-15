@@ -33,7 +33,7 @@ class NetworkGateway(neutron.NeutronResource):
                              'Required': True},
                       'interface_name': {'Type': 'String',
                                          'Required': True}
-                     }
+                      }
 
     properties_schema = {'name': {'Type': 'String'},
                          'tenant_id': {'Type': 'String'},
@@ -78,7 +78,7 @@ class NetworkGateway(neutron.NeutronResource):
 class NetworkGatewayConnection(neutron.NeutronResource):
 
     properties_schema = {'network_gateway_id': {'Type': 'String',
-                                        'Required': True},
+                                                'Required': True},
                          'network_id': {'Type': 'String',
                                         'Required': True},
                          'segmentation_type': {'Type': 'String',
@@ -139,6 +139,7 @@ class NetworkGatewayConnection(neutron.NeutronResource):
             if ex.status_code != 404:
                 raise ex
 
+
 def resource_mapping():
     if clients.neutronclient is None:
         return {}
@@ -147,5 +148,3 @@ def resource_mapping():
         'OS::Neutron::NetworkGateway': NetworkGateway,
         'OS::Neutron::NetworkGatewayConnection': NetworkGatewayConnection,
     }
-
-
