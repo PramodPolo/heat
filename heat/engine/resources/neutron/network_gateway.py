@@ -106,9 +106,6 @@ class NetworkGatewayConnection(neutron.NeutronResource):
             msg = 'segmentation_id must be specified for using vlan'
             raise exception.StackValidationFailed(message=msg)
 
-    def add_dependencies(self, deps):
-        super(NetworkGatewayConnection, self).add_dependencies(deps)
-
     def handle_create(self):
         gateway_id = self.properties.get('network_gateway_id')
         network_id = neutronV20.find_resourceid_by_name_or_id(
