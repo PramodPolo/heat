@@ -32,7 +32,8 @@ class NetworkGateway(neutron.NeutronResource):
     devices_schema = {'id': {'Type': 'String',
                              'Required': True},
                       'interface_name': {'Type': 'String',
-                                         'Required': True}}
+                                         'Required': True}
+                     }
 
     properties_schema = {'name': {'Type': 'String'},
                          'tenant_id': {'Type': 'String'},
@@ -41,7 +42,6 @@ class NetworkGateway(neutron.NeutronResource):
                                          'Type': 'Map',
                                          'Schema': devices_schema},
                                      'Required': True},
-                         'shared': {'Type': 'Boolean'}
                          }
 
     attributes_schema = {
@@ -49,7 +49,6 @@ class NetworkGateway(neutron.NeutronResource):
         "tenant_id": _("Tenant owning the network gateway."),
         "devices": _("Device info for this network gateway."),
         "default": _("A boolean value of default flag."),
-        "shared": _("A boolean value of shared flag."),
         "show": _("All attributes.")
     }
 
@@ -58,12 +57,12 @@ class NetworkGateway(neutron.NeutronResource):
             self.properties,
             self.physical_resource_name())
         network_gateway = self.neutron().create_network_gateway(
-            {'network_gateway': props})['network-gateway']
+            {'network_gateway': props})['network_gateway']
         self.resource_id_set(network_gateway['id'])
 
     def _show_resource(self):
         return self.neutron().show_network_gateway(
-            self.resource_id)['network-gateway']
+            self.resource_id)['network_gateway']
 
     def handle_delete(self):
         client = self.neutron()
@@ -78,7 +77,7 @@ class NetworkGateway(neutron.NeutronResource):
 
 class NetworkGatewayConnection(neutron.NeutronResource):
 
-    properties_schema = {'gateway_id': {'Type': 'String',
+    properties_schema = {'network_gateway_id': {'Type': 'String',
                                         'Required': True},
                          'network_id': {'Type': 'String',
                                         'Required': True},
@@ -88,6 +87,13 @@ class NetworkGatewayConnection(neutron.NeutronResource):
                                                    'flat', 'vlan']},
                          'segmentation_id': {'Type': 'Integer'}
                          }
+
+    attributes_schema = {
+        "network_gateway_id": _("Gateway owing gateway connection."),
+        "network_id": _("Network you wish creating the gateway port."),
+        "port_id": _("Gateway port ID for the gateway"),
+        "show": _("All attributes.")
+    }
 
     def validate(self):
         '''
@@ -104,7 +110,7 @@ class NetworkGatewayConnection(neutron.NeutronResource):
         super(NetworkGatewayConnection, self).add_dependencies(deps)
 
     def handle_create(self):
-        gateway_id = self.properties.get('gateway_id')
+        gateway_id = self.properties.get('network_gateway_id')
         network_id = neutronV20.find_resourceid_by_name_or_id(
             self.neutron(),
             'network',
@@ -136,7 +142,6 @@ class NetworkGatewayConnection(neutron.NeutronResource):
             if ex.status_code != 404:
                 raise ex
 
-
 def resource_mapping():
     if clients.neutronclient is None:
         return {}
@@ -145,4 +150,5 @@ def resource_mapping():
         'OS::Neutron::NetworkGateway': NetworkGateway,
         'OS::Neutron::NetworkGatewayConnection': NetworkGatewayConnection,
     }
+
 
