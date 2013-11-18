@@ -41,6 +41,7 @@ gw_template = '''
       "Type": "OS::Neutron::NetworkGateway",
       "Properties": {
         "name": "NetworkGateway",
+        "tenant_id": "96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f",
         "devices": [{"id": "e52148ca-7db9-4ec3-abe6-2c7c0ff316eb",
         "interface_name": "breth1"}]
       }
@@ -91,6 +92,7 @@ class NeutronNetworkGatewayTest(HeatTestCase):
         neutronclient.Client.create_network_gateway({
             "network_gateway": {
                 "name": u"NetworkGateway",
+                "tenant_id": u"96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f",
                 "devices": [{"id": u"e52148ca-7db9-4ec3-abe6-2c7c0ff316eb",
                              "interface_name": u"breth1"}]
             }
@@ -99,6 +101,7 @@ class NeutronNetworkGatewayTest(HeatTestCase):
             "network_gateway": {
                 "name": "NetworkGateway",
                 "default": False,
+                "tenant_id": "96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f",
                 "devices": [{
                     "interface_name": "breth1",
                     "id": "e52148ca-7db9-4ec3-abe6-2c7c0ff316eb"}
@@ -149,6 +152,7 @@ class NeutronNetworkGatewayTest(HeatTestCase):
             {
                 "name": "NetworkGateway",
                 "default": False,
+                "tenant_id": "96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f",
                 "devices":
                 [{
                     "interface_name": "breth1",
@@ -232,6 +236,7 @@ class NeutronNetworkGatewayTest(HeatTestCase):
         neutronclient.Client.create_network_gateway({
             "network_gateway": {
                 "name": u"NetworkGateway",
+                "tenant_id": u"96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f",
                 "devices": [{"id": u"e52148ca-7db9-4ec3-abe6-2c7c0ff316eb",
                             "interface_name": u"breth1"}]
             }
@@ -354,6 +359,7 @@ class NeutronNetworkGatewayTest(HeatTestCase):
             "network_gateway": {
                 "name": "NetworkGateway",
                 "default": False,
+                "tenant_id": "96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f",
                 "devices":
                 [{
                     "interface_name": "breth1",
@@ -370,6 +376,8 @@ class NeutronNetworkGatewayTest(HeatTestCase):
 
         scheduler.TaskRunner(rsrc.create)()
         self.assertEqual('NetworkGateway', rsrc.FnGetAtt('name'))
+        self.assertEqual('96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f',
+                         rsrc.FnGetAtt('tenant_id'))
         self.assertEqual([{"id": u"e52148ca-7db9-4ec3-abe6-2c7c0ff316eb",
                          "interface_name": u"breth1"}],
                          rsrc.FnGetAtt('devices'))
