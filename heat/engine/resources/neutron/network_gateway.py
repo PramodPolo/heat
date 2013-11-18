@@ -69,10 +69,25 @@ class NetworkGateway(neutron.NeutronResource):
         try:
             client.delete_network_gateway(self.resource_id)
         except NeutronClientException as ex:
-            if ex.status_code != 404:
+            # if the network_gateway didn't exists, it may return 500.
+            # so we check existence of the netwrok_gateway right now.
+            if self._find_network_gateway() is False:
+                return
+            else:
                 raise ex
-        else:
-            return scheduler.TaskRunner(self._confirm_delete)()
+        return scheduler.TaskRunner(self._confirm_delete)()
+
+    def _confirm_delete(self):
+        while True:
+            yield
+            if self._find_network_gateway() is False:
+                return
+
+    def _find_network_gateway(self):
+        for ng in self.neutron().list_network_gateways()['network_gateways']:
+            if self.resource_id in ng['id']:
+                return True
+        return False
 
 
 class NetworkGatewayConnection(neutron.NeutronResource):
@@ -139,8 +154,16 @@ class NetworkGatewayConnection(neutron.NeutronResource):
                  'segmentation_type': segmentation_type,
                  'segmentation_id': int(segmentation_id)})
         except NeutronClientException as ex:
-            if ex.status_code != 404:
-                raise ex
+            if ex.status_code is 404:
+                return
+            # if network_gateway was also deleted, it returns 500.
+            # so check existence of the port by list_network_gateways()
+            for ng in self.neutron().list_network_gateways()[
+                    'network_gateways']:
+                for port in ng['ports']:
+                    if port_id in port['port_id']:
+                        return
+            raise ex
 
     def _show_resource(self):
         (gateway_id, network_id, segmentation_type,
