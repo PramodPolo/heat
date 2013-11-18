@@ -41,7 +41,6 @@ gw_template = '''
       "Type": "OS::Neutron::NetworkGateway",
       "Properties": {
         "name": "NetworkGateway",
-        "tenant_id": "96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f",
         "devices": [{"id": "e52148ca-7db9-4ec3-abe6-2c7c0ff316eb",
         "interface_name": "breth1"}]
       }
@@ -72,13 +71,9 @@ gwc_template = '''
 
 @skipIf(neutronclient is None, 'neutronclient unavailable')
 class NeutronNetworkGatewayTest(HeatTestCase):
-
+    @skipIf(neutronV20 is None, "Missing Neutron v2_0")
     def setUp(self):
         super(NeutronNetworkGatewayTest, self).setUp()
-        self.set_stubs()
-        utils.setup_dummy_db()
-
-    def set_stubs(self):
         self.m.StubOutWithMock(neutronclient.Client, 'create_network_gateway')
         self.m.StubOutWithMock(neutronclient.Client, 'show_network_gateway')
         self.m.StubOutWithMock(neutronclient.Client, 'delete_network_gateway')
@@ -88,14 +83,14 @@ class NeutronNetworkGatewayTest(HeatTestCase):
         self.m.StubOutWithMock(neutronclient.Client, 'list_networks')
         self.m.StubOutWithMock(neutronV20, 'find_resourceid_by_name_or_id')
         self.m.StubOutWithMock(clients.OpenStackClients, 'keystone')
+        utils.setup_dummy_db()
 
-    def create_network_gateway(self):
+    def prepare_create_network_gateway(self):
         clients.OpenStackClients.keystone().AndReturn(
             fakes.FakeKeystoneClient())
         neutronclient.Client.create_network_gateway({
             "network_gateway": {
                 "name": u"NetworkGateway",
-                "tenant_id": u"96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f",
                 "devices": [{"id": u"e52148ca-7db9-4ec3-abe6-2c7c0ff316eb",
                              "interface_name": u"breth1"}]
             }
@@ -104,7 +99,6 @@ class NeutronNetworkGatewayTest(HeatTestCase):
             "network_gateway": {
                 "name": "NetworkGateway",
                 "default": False,
-                "tenant_id": "96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f",
                 "devices": [{
                     "interface_name": "breth1",
                     "id": "e52148ca-7db9-4ec3-abe6-2c7c0ff316eb"}
@@ -121,7 +115,7 @@ class NeutronNetworkGatewayTest(HeatTestCase):
             t['Resources']['NetworkGateway'], stack)
         return rsrc
 
-    def create_gateway_connection(self):
+    def prepare_create_gateway_connection(self):
         clients.OpenStackClients.keystone().AndReturn(
             fakes.FakeKeystoneClient())
         neutronV20.find_resourceid_by_name_or_id(
@@ -134,7 +128,7 @@ class NeutronNetworkGatewayTest(HeatTestCase):
                 "network_id": "6af055d3-26f6-48dd-a597-7611d7e58d35",
                 "segmentation_id": 10,
                 "segmentation_type": u"vlan"
-        }
+            }
         ).AndReturn({
             "connection_info": {
                 "network_gateway_id": "ed4c03b9-8251-4c09-acc4-e59ee9e6aa37",
@@ -155,7 +149,6 @@ class NeutronNetworkGatewayTest(HeatTestCase):
             {
                 "name": "NetworkGateway",
                 "default": False,
-                "tenant_id": "96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f",
                 "devices":
                 [{
                     "interface_name": "breth1",
@@ -174,14 +167,15 @@ class NeutronNetworkGatewayTest(HeatTestCase):
                 "network_id": u"6af055d3-26f6-48dd-a597-7611d7e58d35",
                 "segmentation_id": 10,
                 "segmentation_type": u"vlan"
-        }
+            }
         ).AndReturn(None)
 
         neutronclient.Client.disconnect_network_gateway(
             u"ed4c03b9-8251-4c09-acc4-e59ee9e6aa37", {
                 "network_id": u"6af055d3-26f6-48dd-a597-7611d7e58d35",
                 "segmentation_id": 10,
-                "segmentation_type": u"vlan"}
+                "segmentation_type": u"vlan"
+            }
         ).AndRaise(qe.NeutronClientException(status_code=404))
 
         neutronclient.Client.delete_network_gateway(
@@ -196,8 +190,8 @@ class NeutronNetworkGatewayTest(HeatTestCase):
             'a1349845-80ff-49bf-82bf-6be454d41560'
         ).AndRaise(qe.NeutronClientException(status_code=404))
 
-        rsrc = self.create_network_gateway()
-        rsrc_con = self.create_gateway_connection()
+        rsrc = self.prepare_create_network_gateway()
+        rsrc_con = self.prepare_create_gateway_connection()
         self.m.ReplayAll()
 
         rsrc.validate()
@@ -238,7 +232,6 @@ class NeutronNetworkGatewayTest(HeatTestCase):
         neutronclient.Client.create_network_gateway({
             "network_gateway": {
                 "name": u"NetworkGateway",
-                "tenant_id": u"96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f",
                 "devices": [{"id": u"e52148ca-7db9-4ec3-abe6-2c7c0ff316eb",
                             "interface_name": u"breth1"}]
             }
@@ -293,7 +286,7 @@ class NeutronNetworkGatewayTest(HeatTestCase):
             'a1349845-80ff-49bf-82bf-6be454d41560'
         ).AndRaise(network_gateway.NeutronClientException)
 
-        rsrc = self.create_network_gateway()
+        rsrc = self.prepare_create_network_gateway()
         self.m.ReplayAll()
 
         scheduler.TaskRunner(rsrc.create)()
@@ -313,7 +306,7 @@ class NeutronNetworkGatewayTest(HeatTestCase):
                 "segmentation_type": u"vlan"}
         ).AndRaise(network_gateway.NeutronClientException)
 
-        rsrc = self.create_gateway_connection()
+        rsrc = self.prepare_create_gateway_connection()
         self.m.ReplayAll()
 
         scheduler.TaskRunner(rsrc.create)()
@@ -361,7 +354,6 @@ class NeutronNetworkGatewayTest(HeatTestCase):
             "network_gateway": {
                 "name": "NetworkGateway",
                 "default": False,
-                "tenant_id": "96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f",
                 "devices":
                 [{
                     "interface_name": "breth1",
@@ -373,13 +365,11 @@ class NeutronNetworkGatewayTest(HeatTestCase):
         neutronclient.Client.show_network_gateway(
             'a1349845-80ff-49bf-82bf-6be454d41560'
         ).MultipleTimes().AndReturn(sng)
-        rsrc = self.create_network_gateway()
+        rsrc = self.prepare_create_network_gateway()
         self.m.ReplayAll()
 
         scheduler.TaskRunner(rsrc.create)()
         self.assertEqual('NetworkGateway', rsrc.FnGetAtt('name'))
-        self.assertEqual('96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f',
-                         rsrc.FnGetAtt('tenant_id'))
         self.assertEqual([{"id": u"e52148ca-7db9-4ec3-abe6-2c7c0ff316eb",
                          "interface_name": u"breth1"}],
                          rsrc.FnGetAtt('devices'))
@@ -394,7 +384,7 @@ class NeutronNetworkGatewayTest(HeatTestCase):
         self.m.VerifyAll()
 
     def test_gateway_connection_attribute(self):
-        rsrc = self.create_gateway_connection()
+        rsrc = self.prepare_create_gateway_connection()
         self.m.ReplayAll()
 
         scheduler.TaskRunner(rsrc.create)()

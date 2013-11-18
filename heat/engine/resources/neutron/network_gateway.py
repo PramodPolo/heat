@@ -36,7 +36,6 @@ class NetworkGateway(neutron.NeutronResource):
                       }
 
     properties_schema = {'name': {'Type': 'String'},
-                         'tenant_id': {'Type': 'String'},
                          'devices': {'Type': 'List',
                                      'Schema': {
                                          'Type': 'Map',
@@ -46,7 +45,6 @@ class NetworkGateway(neutron.NeutronResource):
 
     attributes_schema = {
         "name": _("The name of network gateway."),
-        "tenant_id": _("Tenant owning the network gateway."),
         "devices": _("Device info for this network gateway."),
         "default": _("A boolean value of default flag."),
         "show": _("All attributes.")
