@@ -114,30 +114,42 @@ class NetworkGatewayConnection(neutron.NeutronResource):
             self.properties.get('network_id'))
         segmentation_type = self.properties.get('segmentation_type')
         segmentation_id = self.properties.get('segmentation_id')
-        self.neutron().connect_network_gateway(
+        ret = self.neutron().connect_network_gateway(
             gateway_id,
             {'network_id': network_id,
-             'segmentation_type': segmentation_type,
-             'segmentation_id': segmentation_id})
+                'segmentation_type': segmentation_type,
+                'segmentation_id': segmentation_id}
+        )
+        port_id = ret['connection_info']['port_id']
         self.resource_id_set(
-            '%s:%s:%s:%s' %
-            (gateway_id, network_id, segmentation_type, segmentation_id))
+            '%s:%s:%s:%s:%s' %
+            (gateway_id, network_id,
+                segmentation_type, segmentation_id, port_id))
 
     def handle_delete(self):
         if not self.resource_id:
             return
         client = self.neutron()
-        (gateway_id, network_id,
-         segmentation_type, segmentation_id) = self.resource_id.split(':')
+        (gateway_id, network_id, segmentation_type,
+         segmentation_id, port_id) = self.resource_id.split(':')
         try:
             client.disconnect_network_gateway(
                 gateway_id,
                 {'network_id': network_id,
                  'segmentation_type': segmentation_type,
-                 'segmentation_id': segmentation_id})
+                 'segmentation_id': int(segmentation_id)})
         except NeutronClientException as ex:
             if ex.status_code != 404:
                 raise ex
+
+    def _show_resource(self):
+        (gateway_id, network_id, segmentation_type,
+         segmentation_id, port_id) = self.resource_id.split(':')
+        return {'network_gateway_id': gateway_id,
+                'network_id': network_id,
+                'segmentation_type': segmentation_type,
+                'segmentation_id': int(segmentation_id),
+                'port_id': port_id}
 
 
 def resource_mapping():
