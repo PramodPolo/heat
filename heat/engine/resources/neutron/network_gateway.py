@@ -61,17 +61,23 @@ class NetworkGateway(neutron.NeutronResource):
         self.resource_id_set(network_gateway['id'])
 
     def _show_resource(self):
-        return self.neutron().show_network_gateway(
-            self.resource_id)['network_gateway']
+        ng = self.neutron().list_network_gateways(
+            id=self.resource_id)['network_gateways']
+        if ng != []:
+            return ng[0]
+        else:
+            return {}
 
     def handle_delete(self):
         client = self.neutron()
         try:
             client.delete_network_gateway(self.resource_id)
         except NeutronClientException as ex:
-            # if the network_gateway didn't exists, it may return 500.
-            # so we check existence of the netwrok_gateway right now.
-            if self._find_network_gateway() is False:
+            # If the network_gateway didn't exists,
+            # neutron may return 500 when using show_network_gateway.
+            # So we would check existence of the network_gateway by
+            # list_network_gateway() with resource_id.
+            if self._show_resource() == {}:
                 return
             else:
                 raise ex
@@ -80,14 +86,8 @@ class NetworkGateway(neutron.NeutronResource):
     def _confirm_delete(self):
         while True:
             yield
-            if self._find_network_gateway() is False:
+            if self._show_resource() == {}:
                 return
-
-    def _find_network_gateway(self):
-        for ng in self.neutron().list_network_gateways()['network_gateways']:
-            if self.resource_id in ng['id']:
-                return True
-        return False
 
 
 class NetworkGatewayConnection(neutron.NeutronResource):
@@ -117,8 +117,11 @@ class NetworkGatewayConnection(neutron.NeutronResource):
         super(NetworkGatewayConnection, self).validate()
         segmentation_type = self.properties.get('segmentation_type')
         segmentation_id = self.properties.get('segmentation_id')
-        if segmentation_type == 'vlan' and not segmentation_id:
+        if segmentation_type == 'vlan' and segmentation_id is None:
             msg = 'segmentation_id must be specified for using vlan'
+            raise exception.StackValidationFailed(message=msg)
+        if segmentation_type == 'flat' and segmentation_id:
+            msg = 'segmentation_id must not be specified for using flat'
             raise exception.StackValidationFailed(message=msg)
 
     def handle_create(self):
@@ -129,11 +132,12 @@ class NetworkGatewayConnection(neutron.NeutronResource):
             self.properties.get('network_id'))
         segmentation_type = self.properties.get('segmentation_type')
         segmentation_id = self.properties.get('segmentation_id')
+        arg = {'network_id': network_id,
+               'segmentation_type': segmentation_type}
+        if segmentation_id is not None:
+            arg['segmentation_id'] = int(segmentation_id)
         ret = self.neutron().connect_network_gateway(
-            gateway_id,
-            {'network_id': network_id,
-                'segmentation_type': segmentation_type,
-                'segmentation_id': segmentation_id}
+            gateway_id, arg
         )
         port_id = ret['connection_info']['port_id']
         self.resource_id_set(
@@ -148,22 +152,24 @@ class NetworkGatewayConnection(neutron.NeutronResource):
         (gateway_id, network_id, segmentation_type,
          segmentation_id, port_id) = self.resource_id.split(':')
         try:
-            client.disconnect_network_gateway(
-                gateway_id,
-                {'network_id': network_id,
-                 'segmentation_type': segmentation_type,
-                 'segmentation_id': int(segmentation_id)})
+            arg = {'network_id': network_id,
+                   'segmentation_type': segmentation_type}
+            if segmentation_id != 'None':
+                arg['segmentation_id'] = int(segmentation_id)
+            client.disconnect_network_gateway(gateway_id, arg)
         except NeutronClientException as ex:
-            if ex.status_code is 404:
+            if ex.status_code == 404:
                 return
-            # if network_gateway was also deleted, it returns 500.
-            # so check existence of the port by list_network_gateways()
-            for ng in self.neutron().list_network_gateways()[
-                    'network_gateways']:
+            # If the network_gateway didn't exists,
+            # neutron may return 500 when using disconnect_network_gateway.
+            # So we would check existence of the port by
+            # list_network_gateway() with gateway_id.
+            for ng in self.neutron().list_network_gateways(
+                    id=gateway_id)['network_gateways']:
                 for port in ng['ports']:
                     if port_id in port['port_id']:
-                        return
-            raise ex
+                        raise ex
+            return
 
     def _show_resource(self):
         (gateway_id, network_id, segmentation_type,
