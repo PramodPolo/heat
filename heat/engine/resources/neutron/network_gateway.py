@@ -61,6 +61,10 @@ class NetworkGateway(neutron.NeutronResource):
         self.resource_id_set(network_gateway['id'])
 
     def _show_resource(self):
+        # If the network_gateway didn't exists,
+        # neutron may return 500 when using show_network_gateway.
+        # So we would check existence of the network_gateway by
+        # list_network_gateway() with resource_id.
         ng = self.neutron().list_network_gateways(
             id=self.resource_id)['network_gateways']
         if ng != []:
@@ -73,10 +77,6 @@ class NetworkGateway(neutron.NeutronResource):
         try:
             client.delete_network_gateway(self.resource_id)
         except NeutronClientException as ex:
-            # If the network_gateway didn't exists,
-            # neutron may return 500 when using show_network_gateway.
-            # So we would check existence of the network_gateway by
-            # list_network_gateway() with resource_id.
             if self._show_resource() == {}:
                 return
             else:
@@ -121,7 +121,7 @@ class NetworkGatewayConnection(neutron.NeutronResource):
             msg = 'segmentation_id must be specified for using vlan'
             raise exception.StackValidationFailed(message=msg)
         if segmentation_type == 'flat' and segmentation_id:
-            msg = 'segmentation_id must not be specified for using flat'
+            msg = 'segmentation_id cannot be specified except 0 for using flat'
             raise exception.StackValidationFailed(message=msg)
 
     def handle_create(self):
