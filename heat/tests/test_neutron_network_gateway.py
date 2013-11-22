@@ -555,7 +555,7 @@ class NeutronNetworkGatewayTest(HeatTestCase):
         error = self.assertRaises(exception.StackValidationFailed,
                                   scheduler.TaskRunner(rsrc2.validate))
         self.assertEqual(
-            'segmentation_id must not be specified for using flat',
+            'segmentation_id cannot be specified except 0 for using flat',
             str(error))
         self.m.VerifyAll()
 
