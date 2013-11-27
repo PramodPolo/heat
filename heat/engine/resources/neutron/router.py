@@ -181,6 +181,40 @@ class RouterGateway(neutron.NeutronResource):
                 raise ex
 
 
+class Route(neutron.NeutronResource):
+
+    routes_schema = {'destination': {'Type': 'String',
+                                     'Required': True},
+                     'nexthop': {'Type': 'String',
+                                 'Required': True}
+                     }
+
+    properties_schema = {'router_id': {'Type': 'String',
+                                       'Required': True},
+                         'routes': {'Type': 'List',
+                                    'Schema': {
+                                        'Type': 'Map',
+                                        'Schema': routes_schema},
+                                    'Required': True},
+                         }
+
+    def add_dependencies(self, deps):
+        super(Route, self).add_dependencies(deps)
+        # TODO: add dependencies for routing
+
+    def handle_create(self):
+        router_id = self.properties.get('router_id')
+        routes = self.properties.get('routes')
+        self.neutron().update_router(router_id, {'router': {'routes':routes}})
+        self.resource_id_set('%s:%s' % (router_id, routes))
+
+    def handle_delete(self):
+        if not self.resource_id:
+            return
+        (router_id, routes) = self.resource_id.split(':')
+        self.neutron().update_router(router_id, {'router': {'routes':{}}})
+
+
 def resource_mapping():
     if clients.neutronclient is None:
         return {}
@@ -189,4 +223,6 @@ def resource_mapping():
         'OS::Neutron::Router': Router,
         'OS::Neutron::RouterInterface': RouterInterface,
         'OS::Neutron::RouterGateway': RouterGateway,
+        'OS::Neutron::Route': Route,
     }
+
