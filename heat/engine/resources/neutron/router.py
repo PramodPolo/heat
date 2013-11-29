@@ -181,7 +181,7 @@ class RouterGateway(neutron.NeutronResource):
                 raise ex
 
 
-class Route(neutron.NeutronResource):
+class RouterRoutes(neutron.NeutronResource):
 
     routes_schema = {'destination': {'Type': 'String',
                                      'Required': True},
@@ -195,12 +195,27 @@ class Route(neutron.NeutronResource):
                                     'Schema': {
                                         'Type': 'Map',
                                         'Schema': routes_schema},
-                                    'Required': True},
+                                    'Required': True,
+                                    'UpdateAllowed': True},
                          }
 
+    update_allowed_keys = ('Properties',)
+
     def add_dependencies(self, deps):
-        super(Route, self).add_dependencies(deps)
-        # TODO: add dependencies for routing
+        super(RouterRoutes, self).add_dependencies(deps)
+        for resource in self.stack.itervalues():
+            # depend on any RouterInterface in this template with the same
+            # router_id as this router_id
+            if (resource.has_interface('OS::Neutron::RouterInterface') and
+                resource.properties.get('router_id') ==
+                    self.properties.get('router_id')):
+                        deps += (self, resource)
+            # depend on any RouterGateway in this template with the same
+            # router_id as this router_id
+            elif (resource.has_interface('OS::Neutron::RouterGateway') and
+                resource.properties.get('router_id') ==
+                    self.properties.get('router_id')):
+                        deps += (self, resource)
 
     def handle_create(self):
         router_id = self.properties.get('router_id')
@@ -211,8 +226,21 @@ class Route(neutron.NeutronResource):
     def handle_delete(self):
         if not self.resource_id:
             return
-        (router_id, routes) = self.resource_id.split(':')
-        self.neutron().update_router(router_id, {'router': {'routes':{}}})
+        (router_id, routes) = self.resource_id.split(':',1)
+        try:
+            self.neutron().update_router(router_id, {'router': {'routes':[]}})
+        except NeutronClientException as ex:
+            if ex.status_code != 404:
+                raise ex
+
+    def handle_update(self, json_snippet, tmpl_diff, prop_diff):
+        if not self.resource_id:
+            return
+        (router_id, routes) = self.resource_id.split(':',1)
+        props = self.prepare_update_properties(json_snippet)
+        routes = props.get('routes')
+        self.neutron().update_router(router_id, {'router': {'routes':routes}})
+        self.resource_id_set('%s:%s' % (router_id, routes))
 
 
 def resource_mapping():
@@ -223,6 +251,6 @@ def resource_mapping():
         'OS::Neutron::Router': Router,
         'OS::Neutron::RouterInterface': RouterInterface,
         'OS::Neutron::RouterGateway': RouterGateway,
-        'OS::Neutron::Route': Route,
+        'OS::Neutron::RouterRoutes': RouterRoutes,
     }
 
