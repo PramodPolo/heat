@@ -61,33 +61,18 @@ class NetworkGateway(neutron.NeutronResource):
         self.resource_id_set(network_gateway['id'])
 
     def _show_resource(self):
-        # If the network_gateway didn't exists,
-        # neutron may return 500 when using show_network_gateway.
-        # So we would check existence of the network_gateway by
-        # list_network_gateway() with resource_id.
-        ng = self.neutron().list_network_gateways(
-            id=self.resource_id)['network_gateways']
-        if ng != []:
-            return ng[0]
-        else:
-            return {}
+        return self.neutron().show_network_gateway(
+            self.resource_id)['network_gateway']
 
     def handle_delete(self):
         client = self.neutron()
         try:
             client.delete_network_gateway(self.resource_id)
         except NeutronClientException as ex:
-            if self._show_resource() == {}:
-                return
-            else:
+            if ex.status_code != 404:
                 raise ex
-        return scheduler.TaskRunner(self._confirm_delete)()
-
-    def _confirm_delete(self):
-        while True:
-            yield
-            if self._show_resource() == {}:
-                return
+        else:
+            return scheduler.TaskRunner(self._confirm_delete)()
 
 
 class NetworkGatewayConnection(neutron.NeutronResource):
@@ -158,18 +143,8 @@ class NetworkGatewayConnection(neutron.NeutronResource):
                 arg['segmentation_id'] = int(segmentation_id)
             client.disconnect_network_gateway(gateway_id, arg)
         except NeutronClientException as ex:
-            if ex.status_code == 404:
-                return
-            # If the network_gateway didn't exists,
-            # neutron may return 500 when using disconnect_network_gateway.
-            # So we would check existence of the port by
-            # list_network_gateway() with gateway_id.
-            for ng in self.neutron().list_network_gateways(
-                    id=gateway_id)['network_gateways']:
-                for port in ng['ports']:
-                    if port_id in port['port_id']:
-                        raise ex
-            return
+            if ex.status_code != 404:
+                raise ex
 
     def _show_resource(self):
         (gateway_id, network_id, segmentation_type,
