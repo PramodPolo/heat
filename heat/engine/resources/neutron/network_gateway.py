@@ -65,6 +65,8 @@ class NetworkGateway(neutron.NeutronResource):
             self.resource_id)['network_gateway']
 
     def handle_delete(self):
+        if not self.resource_id:
+            return
         client = self.neutron()
         try:
             client.delete_network_gateway(self.resource_id)
