@@ -69,8 +69,8 @@ gwc_template = '''
 }
 '''
 
-lng = {
-    'network_gateways': [{
+sng = {
+    'network_gateway': {
         'name': 'NetworkGateway',
         'default': False,
         'tenant_id': '96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f',
@@ -82,7 +82,7 @@ lng = {
             'segmentation_type': 'vlan',
             'port_id': '32acc49c-899e-44ea-8177-6f4157e12eb4',
             'segmentation_id': 10}]
-    }]
+    }
 }
 
 
@@ -92,7 +92,7 @@ class NeutronNetworkGatewayTest(HeatTestCase):
     def setUp(self):
         super(NeutronNetworkGatewayTest, self).setUp()
         self.m.StubOutWithMock(neutronclient.Client, 'create_network_gateway')
-        self.m.StubOutWithMock(neutronclient.Client, 'list_network_gateways')
+        self.m.StubOutWithMock(neutronclient.Client, 'show_network_gateway')
         self.m.StubOutWithMock(neutronclient.Client, 'delete_network_gateway')
         self.m.StubOutWithMock(neutronclient.Client, 'connect_network_gateway')
         self.m.StubOutWithMock(neutronclient.Client,
@@ -163,9 +163,9 @@ class NeutronNetworkGatewayTest(HeatTestCase):
         return rsrc
 
     def test_network_gateway(self):
-        neutronclient.Client.list_network_gateways(
-            id=u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
-        ).AndReturn(lng)
+        neutronclient.Client.show_network_gateway(
+            u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
+        ).AndReturn(sng)
 
         neutronclient.Client.disconnect_network_gateway(
             u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37', {
@@ -187,21 +187,21 @@ class NeutronNetworkGatewayTest(HeatTestCase):
             u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
         ).AndReturn(None)
 
-        neutronclient.Client.list_network_gateways(
-            id=u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
-        ).AndReturn(lng)
+        neutronclient.Client.show_network_gateway(
+            u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
+        ).AndReturn(sng)
 
-        neutronclient.Client.list_network_gateways(
-            id=u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
-        ).AndReturn({'network_gateways': []})
+        neutronclient.Client.show_network_gateway(
+            u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
+        ).AndRaise(qe.NeutronClientException(status_code=404))
 
         neutronclient.Client.delete_network_gateway(
             u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
         ).AndRaise(qe.NeutronClientException(status_code=404))
 
-        neutronclient.Client.list_network_gateways(
-            id=u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
-        ).AndReturn({'network_gateways': []})
+#        neutronclient.Client.show_network_gateway(
+#            u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
+#        ).AndRaise(qe.NeutronClientException(status_code=404))
 
         rsrc = self.prepare_create_network_gateway()
         rsrc_con = self.prepare_create_gateway_connection()
@@ -264,8 +264,8 @@ class NeutronNetworkGatewayTest(HeatTestCase):
                 'port_id': u'32acc49c-899e-44ea-8177-6f4157e12eb4'
             }
         })
-        lng_flat = {
-            'network_gateways': [{
+        sng_flat = {
+            'network_gateway': {
                 'name': 'NetworkGateway',
                 'default': False,
                 'tenant_id': '96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f',
@@ -276,12 +276,12 @@ class NeutronNetworkGatewayTest(HeatTestCase):
                 'ports': [{
                     'segmentation_type': 'flat',
                     'port_id': '32acc49c-899e-44ea-8177-6f4157e12eb4'}]
-            }]
+            }
         }
 
-        neutronclient.Client.list_network_gateways(
-            id=u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
-        ).AndReturn(lng_flat)
+        neutronclient.Client.show_network_gateway(
+            u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
+        ).AndReturn(sng_flat)
 
         neutronclient.Client.disconnect_network_gateway(
             u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37', {
@@ -313,9 +313,9 @@ class NeutronNetworkGatewayTest(HeatTestCase):
             u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
         ).AndReturn(None)
 
-        neutronclient.Client.list_network_gateways(
-            id=u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
-        ).AndReturn({'network_gateways': []})
+        neutronclient.Client.show_network_gateway(
+            u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
+        ).AndRaise(qe.NeutronClientException(status_code=404))
 
         t = template_format.parse(gwc_template_flat)
         stack = utils.parse_stack(t)
@@ -336,7 +336,6 @@ class NeutronNetworkGatewayTest(HeatTestCase):
         self.assertEqual((rsrc_con.DELETE, rsrc_con.COMPLETE), rsrc_con.state)
         scheduler.TaskRunner(rsrc.delete)()
         self.assertEqual((rsrc.DELETE, rsrc.COMPLETE), rsrc.state)
-
         self.m.VerifyAll()
 
     def test_network_gatway_create_failed(self):
@@ -363,6 +362,8 @@ class NeutronNetworkGatewayTest(HeatTestCase):
             'NeutronClientException: An unknown exception occurred.',
             str(error))
         self.assertEqual((rsrc.CREATE, rsrc.FAILED), rsrc.state)
+        self.assertEqual(scheduler.TaskRunner(rsrc.delete)(), None)
+        self.assertEqual((rsrc.DELETE, rsrc.COMPLETE), rsrc.state)
         self.m.VerifyAll()
 
     def test_gateway_connection_create_failed(self):
@@ -393,16 +394,14 @@ class NeutronNetworkGatewayTest(HeatTestCase):
             'NeutronClientException: An unknown exception occurred.',
             str(error))
         self.assertEqual((rsrc.CREATE, rsrc.FAILED), rsrc.state)
+        self.assertEqual(scheduler.TaskRunner(rsrc.delete)(), None)
+        self.assertEqual((rsrc.DELETE, rsrc.COMPLETE), rsrc.state)
         self.m.VerifyAll()
 
     def test_gateway_delete_failed(self):
         neutronclient.Client.delete_network_gateway(
             u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
-        ).AndRaise(qe.NeutronClientException(status_code=404))
-
-        neutronclient.Client.list_network_gateways(
-            id=u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
-        ).AndReturn(lng)
+        ).AndRaise(qe.NeutronClientException(status_code=500))
 
         rsrc = self.prepare_create_network_gateway()
         self.m.ReplayAll()
@@ -422,28 +421,7 @@ class NeutronNetworkGatewayTest(HeatTestCase):
                 'network_id': u'6af055d3-26f6-48dd-a597-7611d7e58d35',
                 'segmentation_id': 10,
                 'segmentation_type': u'vlan'}
-        ).AndRaise(qe.NeutronClientException())
-
-        neutronclient.Client.list_network_gateways(
-            id=u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
-        ).AndReturn({
-            u'network_gateways': [{
-                'name': u'NetworkGateway',
-                'default': False,
-                'tenant_id': u'96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f',
-                'devices': [{
-                    'interface_name': u'breth1',
-                    'id': u'e52148ca-7db9-4ec3-abe6-2c7c0ff316eb'}],
-                'id': u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37',
-                'ports': [
-                    {
-                        'segmentation_type': u'vlan',
-                        'port_id': u'61334f85-0646-4c2a-af2e-5ba10d3482d6',
-                        'segmentation_id': 50
-                    }
-                ]
-            }]
-        })
+        ).AndRaise(qe.NeutronClientException(status_code=404))
 
         neutronclient.Client.disconnect_network_gateway(
             u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37', {
@@ -452,32 +430,6 @@ class NeutronNetworkGatewayTest(HeatTestCase):
                 'segmentation_type': u'vlan'
             }
         ).AndRaise(qe.NeutronClientException())
-
-        neutronclient.Client.list_network_gateways(
-            id=u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
-        ).AndReturn({
-            u'network_gateways': [{
-                'name': u'NetworkGateway',
-                'default': False,
-                'tenant_id': u'96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f',
-                'devices': [{
-                    'interface_name': u'breth1',
-                    'id': u'e52148ca-7db9-4ec3-abe6-2c7c0ff316eb'}],
-                'id': u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37',
-                'ports': [
-                    {
-                        'segmentation_type': u'vlan',
-                        'port_id': u'61334f85-0646-4c2a-af2e-5ba10d3482d6',
-                        'segmentation_id': 50
-                    },
-                    {
-                        'segmentation_type': u'vlan',
-                        'port_id': u'32acc49c-899e-44ea-8177-6f4157e12eb4',
-                        'segmentation_id': 10
-                    }
-                ]
-            }]
-        })
 
         rsrc = self.prepare_create_gateway_connection()
         self.m.ReplayAll()
@@ -560,9 +512,9 @@ class NeutronNetworkGatewayTest(HeatTestCase):
         self.m.VerifyAll()
 
     def test_network_gateway_attribute(self):
-        neutronclient.Client.list_network_gateways(
-            id=u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
-        ).MultipleTimes().AndReturn(lng)
+        neutronclient.Client.show_network_gateway(
+            u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
+        ).MultipleTimes().AndReturn(sng)
         rsrc = self.prepare_create_network_gateway()
         self.m.ReplayAll()
 
