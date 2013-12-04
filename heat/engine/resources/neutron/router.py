@@ -181,28 +181,34 @@ class RouterGateway(neutron.NeutronResource):
                 raise ex
 
 
-class RouterRoutes(neutron.NeutronResource):
-
-    routes_schema = {'destination': {'Type': 'String',
-                                     'Required': True},
-                     'nexthop': {'Type': 'String',
-                                 'Required': True}
-                     }
+class Route(neutron.NeutronResource):
 
     properties_schema = {'router_id': {'Type': 'String',
                                        'Required': True},
-                         'routes': {'Type': 'List',
-                                    'Schema': {
-                                        'Type': 'Map',
-                                        'Schema': routes_schema},
-                                    'Required': True,
-                                    'UpdateAllowed': True},
+                         'destination': {'Type': 'String',
+                                         'Required': True},
+                         'nexthop': {'Type': 'String',
+                                     'Required': True}
                          }
 
-    update_allowed_keys = ('Properties',)
+    def validate(self):
+        super(Route, self).validate()
+        for resource in self.stack.itervalues():
+            # Setting duplicated destination and nexthop into a router
+            # would be error in neutron.
+            if (resource.has_interface('OS::Neutron::Route') and
+                resource.name != self.name and
+                resource.properties.get('router_id') ==
+                    self.properties.get('router_id') and
+                resource.properties.get('destination') ==
+                    self.properties.get('destination') and
+                resource.properties.get('nexthop') ==
+                    self.properties.get('nexthop')):
+                msg = 'Destination and nexthop are duplicated.'
+                raise exception.StackValidationFailed(message=msg)
 
     def add_dependencies(self, deps):
-        super(RouterRoutes, self).add_dependencies(deps)
+        super(Route, self).add_dependencies(deps)
         for resource in self.stack.itervalues():
             # depend on any RouterInterface in this template with the same
             # router_id as this router_id
@@ -213,34 +219,50 @@ class RouterRoutes(neutron.NeutronResource):
             # depend on any RouterGateway in this template with the same
             # router_id as this router_id
             elif (resource.has_interface('OS::Neutron::RouterGateway') and
-                resource.properties.get('router_id') ==
+                    resource.properties.get('router_id') ==
                     self.properties.get('router_id')):
                         deps += (self, resource)
 
     def handle_create(self):
         router_id = self.properties.get('router_id')
-        routes = self.properties.get('routes')
-        self.neutron().update_router(router_id, {'router': {'routes':routes}})
-        self.resource_id_set('%s:%s' % (router_id, routes))
+        routes = self.neutron().show_router(router_id)\
+            .get('router').get('routes')
+        new_route = {'destination': self.properties.get('destination'),
+                     'nexthop': self.properties.get('nexthop')}
+        if not routes:
+            routes = []
+        routes.append(new_route)
+        self.neutron().update_router(router_id, {'router': {'routes': routes}})
+
+        self.resource_id_set('%s:%s:%s' % (router_id,
+                                           new_route['destination'],
+                                           new_route['nexthop']))
 
     def handle_delete(self):
         if not self.resource_id:
             return
-        (router_id, routes) = self.resource_id.split(':',1)
+        (router_id, destination, nexthop) = self.resource_id.split(':')
         try:
-            self.neutron().update_router(router_id, {'router': {'routes':[]}})
+            routes = self.neutron().show_router(router_id)\
+                .get('router').get('routes')
         except NeutronClientException as ex:
             if ex.status_code != 404:
                 raise ex
-
-    def handle_update(self, json_snippet, tmpl_diff, prop_diff):
-        if not self.resource_id:
-            return
-        (router_id, routes) = self.resource_id.split(':',1)
-        props = self.prepare_update_properties(json_snippet)
-        routes = props.get('routes')
-        self.neutron().update_router(router_id, {'router': {'routes':routes}})
-        self.resource_id_set('%s:%s' % (router_id, routes))
+            else:
+                return
+        del_route = {'destination': destination, 'nexthop': nexthop}
+        if not routes:
+            routes = []
+        try:
+            routes.remove(del_route)
+        except ValueError:
+            pass
+        try:
+            self.neutron().update_router(router_id,
+                                         {'router': {'routes': routes}})
+        except NeutronClientException as ex:
+            if ex.status_code != 404:
+                raise ex
 
 
 def resource_mapping():
@@ -251,6 +273,5 @@ def resource_mapping():
         'OS::Neutron::Router': Router,
         'OS::Neutron::RouterInterface': RouterInterface,
         'OS::Neutron::RouterGateway': RouterGateway,
-        'OS::Neutron::RouterRoutes': RouterRoutes,
+        'OS::Neutron::Route': Route,
     }
-
