@@ -139,6 +139,10 @@ class NetworkGatewayConnection(neutron.NeutronResource):
         "network_gateway_id": _("The id of gateway owing gateway connection."),
         "network_id": _(
             "The id of internal network to connect on the gateway."),
+        "segmentation_type": _(
+            "L2 segmentation strategy on the external side of the gateway."),
+        "segmentation_id": _(
+            "The id for L2 segment on the external side of the gateway."),
         "port_id": _("The port id for the gateway"),
         "show": _("All attributes.")
     }
@@ -209,4 +213,3 @@ def resource_mapping():
         'OS::Neutron::NetworkGateway': NetworkGateway,
         'OS::Neutron::NetworkGatewayConnection': NetworkGatewayConnection,
     }
-
