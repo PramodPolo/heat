@@ -15,12 +15,13 @@
 
 from heat.common import exception
 from heat.engine import clients
+from heat.engine import constraints
+from heat.engine import properties
 from heat.engine.resources.neutron import neutron
 from heat.engine import scheduler
 
 if clients.neutronclient is not None:
     from neutronclient.common.exceptions import NeutronClientException
-    from neutronclient.neutron import v2_0 as neutronV20
 
 from heat.openstack.common import log as logging
 
@@ -29,28 +30,48 @@ logger = logging.getLogger(__name__)
 
 class NetworkGateway(neutron.NeutronResource):
 
-    devices_schema = {'id': {'Type': 'String',
-                             'Required': True},
-                      'interface_name': {'Type': 'String',
-                                         'Required': True}
-                      }
+    devices_schema = {
+        'id': properties.Schema(
+            properties.Schema.STRING,
+            description=_('The device id for network_gateway.'),
+            required=True
+        ),
+        'interface_name': properties.Schema(
+            properties.Schema.STRING,
+            description=_('The interface name for network_gateway.'),
+            required=True
+        )
+    }
 
-    properties_schema = {'name': {'Type': 'String'},
-                         'tenant_id': {'Type': 'String'},
-                         'devices': {'Type': 'List',
-                                     'Schema': {
-                                         'Type': 'Map',
-                                         'Schema': devices_schema},
-                                     'Required': True},
-                         }
+    properties_schema = {
+        'name': properties.Schema(
+            properties.Schema.STRING,
+            description=_('The name of network gateway.'),
+            update_allowed=True
+        ),
+        'tenant_id': properties.Schema(
+            properties.Schema.STRING,
+            description=_('Tenant owning the network gateway.')
+        ),
+        'devices': properties.Schema(
+            properties.Schema.LIST,
+            description=_('Device info for this network gateway.'),
+            required=True,
+            schema=properties.Schema(properties.Schema.MAP,
+                                     schema=devices_schema)
+        )
+    }
 
     attributes_schema = {
+        "id": _("The id of network gateway."),
         "name": _("The name of network gateway."),
         "tenant_id": _("Tenant owning the network gateway."),
         "devices": _("Device info for this network gateway."),
         "default": _("A boolean value of default flag."),
         "show": _("All attributes.")
     }
+
+    update_allowed_keys = ('Properties',)
 
     def handle_create(self):
         props = self.prepare_properties(
@@ -76,24 +97,49 @@ class NetworkGateway(neutron.NeutronResource):
         else:
             return scheduler.TaskRunner(self._confirm_delete)()
 
+    def handle_update(self, json_snippet, tmpl_diff, prop_diff):
+        props = self.prepare_update_properties(json_snippet)
+        self.neutron().update_network_gateway(
+            self.resource_id, {'network_gateway': props})
+
 
 class NetworkGatewayConnection(neutron.NeutronResource):
 
-    properties_schema = {'network_gateway_id': {'Type': 'String',
-                                                'Required': True},
-                         'network_id': {'Type': 'String',
-                                        'Required': True},
-                         'segmentation_type': {'Type': 'String',
-                                               'Required': True,
-                                               'AllowedValues': [
-                                                   'flat', 'vlan']},
-                         'segmentation_id': {'Type': 'Integer'}
-                         }
+    properties_schema = {
+        'network_gateway_id': properties.Schema(
+            properties.Schema.STRING,
+            description=_('The id of gateway owing gateway connection.'),
+            required=True
+        ),
+        'network_id': properties.Schema(
+            properties.Schema.STRING,
+            description=_(
+                'The id of internal network to connect on the gateway.'
+            ),
+            required=True
+        ),
+        'segmentation_type': properties.Schema(
+            properties.Schema.STRING,
+            description=_(
+                'L2 segmentation strategy on the external side of the gateway.'
+            ),
+            required=True,
+            constraints=[constraints.AllowedValues(('flat', 'vlan'))]
+        ),
+        'segmentation_id': properties.Schema(
+            properties.Schema.INTEGER,
+            description=_(
+                'The id for L2 segment on the external side of the gateway.'
+            ),
+            constraints=[constraints.Range(0, 4094)]
+        )
+    }
 
     attributes_schema = {
-        "network_gateway_id": _("Gateway owing gateway connection."),
-        "network_id": _("Network you wish creating the gateway port."),
-        "port_id": _("Gateway port ID for the gateway"),
+        "network_gateway_id": _("The id of gateway owing gateway connection."),
+        "network_id": _(
+            "The id of internal network to connect on the gateway."),
+        "port_id": _("The port id for the gateway"),
         "show": _("All attributes.")
     }
 
@@ -113,18 +159,15 @@ class NetworkGatewayConnection(neutron.NeutronResource):
 
     def handle_create(self):
         gateway_id = self.properties.get('network_gateway_id')
-        network_id = neutronV20.find_resourceid_by_name_or_id(
-            self.neutron(),
-            'network',
-            self.properties.get('network_id'))
+        network_id = self.properties.get('network_id')
         segmentation_type = self.properties.get('segmentation_type')
         segmentation_id = self.properties.get('segmentation_id')
-        arg = {'network_id': network_id,
-               'segmentation_type': segmentation_type}
+        props = {'network_id': network_id,
+                 'segmentation_type': segmentation_type}
         if segmentation_id is not None:
-            arg['segmentation_id'] = int(segmentation_id)
+            props['segmentation_id'] = int(segmentation_id)
         ret = self.neutron().connect_network_gateway(
-            gateway_id, arg
+            gateway_id, props
         )
         port_id = ret['connection_info']['port_id']
         self.resource_id_set(
@@ -139,11 +182,11 @@ class NetworkGatewayConnection(neutron.NeutronResource):
         (gateway_id, network_id, segmentation_type,
          segmentation_id, port_id) = self.resource_id.split(':')
         try:
-            arg = {'network_id': network_id,
-                   'segmentation_type': segmentation_type}
+            props = {'network_id': network_id,
+                     'segmentation_type': segmentation_type}
             if segmentation_id != 'None':
-                arg['segmentation_id'] = int(segmentation_id)
-            client.disconnect_network_gateway(gateway_id, arg)
+                props['segmentation_id'] = int(segmentation_id)
+            client.disconnect_network_gateway(gateway_id, props)
         except NeutronClientException as ex:
             if ex.status_code != 404:
                 raise ex
@@ -166,3 +209,4 @@ def resource_mapping():
         'OS::Neutron::NetworkGateway': NetworkGateway,
         'OS::Neutron::NetworkGatewayConnection': NetworkGatewayConnection,
     }
+
