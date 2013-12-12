@@ -63,7 +63,6 @@ class NetworkGateway(neutron.NeutronResource):
     }
 
     attributes_schema = {
-        "id": _("The id of network gateway."),
         "name": _("The name of network gateway."),
         "tenant_id": _("Tenant owning the network gateway."),
         "devices": _("Device info for this network gateway."),

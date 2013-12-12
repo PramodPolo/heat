@@ -24,7 +24,7 @@ from heat.openstack.common.importutils import try_import
 from heat.tests import fakes
 from heat.tests import utils
 from heat.tests.common import HeatTestCase
-from mox import IsA
+from mox import IgnoreArg
 
 neutronclient = try_import('neutronclient.v2_0.client')
 neutronV20 = try_import('neutronclient.neutron.v2_0')
@@ -95,10 +95,10 @@ class NeutronNetworkGatewayTest(HeatTestCase):
         self.m.StubOutWithMock(neutronclient.Client, 'show_network_gateway')
         self.m.StubOutWithMock(neutronclient.Client, 'delete_network_gateway')
         self.m.StubOutWithMock(neutronclient.Client, 'connect_network_gateway')
+        self.m.StubOutWithMock(neutronclient.Client, 'update_network_gateway')
         self.m.StubOutWithMock(neutronclient.Client,
                                'disconnect_network_gateway')
         self.m.StubOutWithMock(neutronclient.Client, 'list_networks')
-        self.m.StubOutWithMock(neutronV20, 'find_resourceid_by_name_or_id')
         self.m.StubOutWithMock(clients.OpenStackClients, 'keystone')
         utils.setup_dummy_db()
 
@@ -137,11 +137,6 @@ class NeutronNetworkGatewayTest(HeatTestCase):
     def prepare_create_gateway_connection(self):
         clients.OpenStackClients.keystone().AndReturn(
             fakes.FakeKeystoneClient())
-        neutronV20.find_resourceid_by_name_or_id(
-            IsA(neutronclient.Client()),
-            u'network',
-            u'6af055d3-26f6-48dd-a597-7611d7e58d35'
-        ).AndReturn('6af055d3-26f6-48dd-a597-7611d7e58d35')
         neutronclient.Client.connect_network_gateway(
             u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37', {
                 'network_id': u'6af055d3-26f6-48dd-a597-7611d7e58d35',
@@ -166,6 +161,11 @@ class NeutronNetworkGatewayTest(HeatTestCase):
         neutronclient.Client.show_network_gateway(
             u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
         ).AndReturn(sng)
+
+        neutronclient.Client.update_network_gateway(
+            u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37',
+            {'network_gateway': {'name':
+                                 u'NetworkGateway2nd'}}).AndReturn(None)
 
         neutronclient.Client.disconnect_network_gateway(
             u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37', {
@@ -199,10 +199,6 @@ class NeutronNetworkGatewayTest(HeatTestCase):
             u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
         ).AndRaise(qe.NeutronClientException(status_code=404))
 
-#        neutronclient.Client.show_network_gateway(
-#            u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
-#        ).AndRaise(qe.NeutronClientException(status_code=404))
-
         rsrc = self.prepare_create_network_gateway()
         rsrc_con = self.prepare_create_gateway_connection()
         self.m.ReplayAll()
@@ -224,19 +220,30 @@ class NeutronNetworkGatewayTest(HeatTestCase):
         self.assertRaises(
             exception.InvalidTemplateAttribute, rsrc_con.FnGetAtt, 'Foo')
 
-        self.assertRaises(resource.UpdateReplace,
-                          rsrc.handle_update, {}, {}, {})
-        self.assertRaises(resource.UpdateReplace,
-                          rsrc_con.handle_update, {}, {}, {})
+        snippet_for_update = {
+            'Type': u'OS::Neutron::NetworkGateway',
+            'Properties': {
+                'name': u'NetworkGateway2nd',
+                'tenant_id': u'96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f',
+                'devices': [{'id': u'e52148ca-7db9-4ec3-abe6-2c7c0ff316eb',
+                             'interface_name': u'breth1'}]
+            }
+        }
 
-        self.assertEqual(scheduler.TaskRunner(rsrc_con.delete)(), None)
+        self.assertIsNone(rsrc.handle_update(snippet_for_update, IgnoreArg(),
+                          IgnoreArg()))
+
+        self.assertRaises(resource.UpdateReplace, rsrc_con.handle_update, {},
+                          {}, {})
+
+        self.assertIsNone(scheduler.TaskRunner(rsrc_con.delete)())
         self.assertEqual((rsrc_con.DELETE, rsrc_con.COMPLETE), rsrc_con.state)
         rsrc_con.state_set(rsrc_con.CREATE, rsrc_con.COMPLETE,
                            'to delete again')
         scheduler.TaskRunner(rsrc_con.delete)()
         self.assertEqual((rsrc_con.DELETE, rsrc_con.COMPLETE), rsrc_con.state)
 
-        self.assertEqual(scheduler.TaskRunner(rsrc.delete)(), None)
+        self.assertIsNone(scheduler.TaskRunner(rsrc.delete)())
         self.assertEqual((rsrc.DELETE, rsrc.COMPLETE), rsrc.state)
         rsrc.state_set(rsrc.CREATE, rsrc.COMPLETE, 'to delete again')
         scheduler.TaskRunner(rsrc.delete)()
@@ -247,11 +254,6 @@ class NeutronNetworkGatewayTest(HeatTestCase):
         rsrc = self.prepare_create_network_gateway()
         clients.OpenStackClients.keystone().AndReturn(
             fakes.FakeKeystoneClient())
-        neutronV20.find_resourceid_by_name_or_id(
-            IsA(neutronclient.Client()),
-            u'network',
-            u'6af055d3-26f6-48dd-a597-7611d7e58d35'
-        ).AndReturn('6af055d3-26f6-48dd-a597-7611d7e58d35')
         neutronclient.Client.connect_network_gateway(
             u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37', {
                 'network_id': u'6af055d3-26f6-48dd-a597-7611d7e58d35',
@@ -280,8 +282,7 @@ class NeutronNetworkGatewayTest(HeatTestCase):
         }
 
         neutronclient.Client.show_network_gateway(
-            u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37'
-        ).AndReturn(sng_flat)
+            u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37').AndReturn(sng_flat)
 
         neutronclient.Client.disconnect_network_gateway(
             u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37', {
@@ -362,18 +363,13 @@ class NeutronNetworkGatewayTest(HeatTestCase):
             'NeutronClientException: An unknown exception occurred.',
             str(error))
         self.assertEqual((rsrc.CREATE, rsrc.FAILED), rsrc.state)
-        self.assertEqual(scheduler.TaskRunner(rsrc.delete)(), None)
+        self.assertIsNone(scheduler.TaskRunner(rsrc.delete)())
         self.assertEqual((rsrc.DELETE, rsrc.COMPLETE), rsrc.state)
         self.m.VerifyAll()
 
     def test_gateway_connection_create_failed(self):
         clients.OpenStackClients.keystone().AndReturn(
             fakes.FakeKeystoneClient())
-        neutronV20.find_resourceid_by_name_or_id(
-            IsA(neutronclient.Client()),
-            u'network',
-            u'6af055d3-26f6-48dd-a597-7611d7e58d35'
-        ).AndReturn('6af055d3-26f6-48dd-a597-7611d7e58d35')
         neutronclient.Client.connect_network_gateway(
             u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37', {
                 'network_id': u'6af055d3-26f6-48dd-a597-7611d7e58d35',
@@ -394,7 +390,7 @@ class NeutronNetworkGatewayTest(HeatTestCase):
             'NeutronClientException: An unknown exception occurred.',
             str(error))
         self.assertEqual((rsrc.CREATE, rsrc.FAILED), rsrc.state)
-        self.assertEqual(scheduler.TaskRunner(rsrc.delete)(), None)
+        self.assertIsNone(scheduler.TaskRunner(rsrc.delete)())
         self.assertEqual((rsrc.DELETE, rsrc.COMPLETE), rsrc.state)
         self.m.VerifyAll()
 
@@ -436,7 +432,7 @@ class NeutronNetworkGatewayTest(HeatTestCase):
 
         scheduler.TaskRunner(rsrc.create)()
 
-        self.assertEqual(scheduler.TaskRunner(rsrc.delete)(), None)
+        self.assertIsNone(scheduler.TaskRunner(rsrc.delete)())
         self.assertEqual((rsrc.DELETE, rsrc.COMPLETE), rsrc.state)
 
         rsrc.state_set(rsrc.CREATE, rsrc.COMPLETE, 'to delete again')
@@ -519,6 +515,10 @@ class NeutronNetworkGatewayTest(HeatTestCase):
         self.m.ReplayAll()
 
         scheduler.TaskRunner(rsrc.create)()
+        self.assertEquals(u'ed4c03b9-8251-4c09-acc4-e59ee9e6aa37',
+                          rsrc.FnGetRefId())
+        self.assertEqual(u'96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f',
+                         rsrc.FnGetAtt('tenant_id'))
         self.assertEqual('NetworkGateway', rsrc.FnGetAtt('name'))
         self.assertEqual(u'96ba52dc-c5c5-44c6-9a9d-d3ba1a03f77f',
                          rsrc.FnGetAtt('tenant_id'))
@@ -544,6 +544,8 @@ class NeutronNetworkGatewayTest(HeatTestCase):
                          rsrc.FnGetAtt('network_gateway_id'))
         self.assertEqual('6af055d3-26f6-48dd-a597-7611d7e58d35',
                          rsrc.FnGetAtt('network_id'))
+        self.assertEqual('vlan', rsrc.FnGetAtt('segmentation_type'))
+        self.assertEqual(10, rsrc.FnGetAtt('segmentation_id'))
         self.assertEqual('32acc49c-899e-44ea-8177-6f4157e12eb4',
                          rsrc.FnGetAtt('port_id'))
 
